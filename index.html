@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<script>
+	// This test demonstrates a bug in Safari where it wrongly caches the Content-Length from a partial response.
+	// After a partial request, any 'HEAD' requests return an incorrect value for Content-Length.
+
+	// testFile should point to a file > 1 byte in length. In this case, the file is 9 bytes long.
+	var testFile = 'testfile.txt';
+	var filesize = 9;
+
+	var xhr1_cacheLength = new XMLHttpRequest();
+	var xhr2_rangeRequest = new XMLHttpRequest();
+	var xhr3_getLengthAgain = new XMLHttpRequest();
+
+	xhr1_cacheLength.open('HEAD', testFile, true);
+	xhr2_rangeRequest.open('GET', testFile, true);
+	xhr3_getLengthAgain.open('HEAD', testFile, true);
+
+	xhr2_rangeRequest.setRequestHeader('Range', 'bytes=0-0');
+
+	xhr1_cacheLength.onload = function() {
+		if (Number(xhr1_cacheLength.getResponseHeader('Content-Length')) !== filesize) {
+			throw 'Incorrect file size, should be ' + filesize;
+		}
+		console.log('Length: ' + filesize);
+
+		var rangeHeader = xhr1_cacheLength.getResponseHeader("Accept-Ranges");
+		if (!rangeHeader || rangeHeader !== 'bytes') {
+			throw 'Test requires that server has "Accept-Ranges: bytes" header';
+		}
+
+		xhr2_rangeRequest.send(null);
+	};
+
+	xhr2_rangeRequest.onload = function() {
+		var rangeRequestLength = Number(xhr2_rangeRequest.getResponseHeader('Content-Length'));
+		if (rangeRequestLength !== 1) {
+			throw 'incorrect Content-Length for range request';
+		}
+
+		console.log('Range request, size: ' + rangeRequestLength);
+		xhr3_getLengthAgain.send(null);
+	};
+
+	xhr3_getLengthAgain.onload = function() {
+		var postRangeRequestFilesize = Number(xhr3_getLengthAgain.getResponseHeader('Content-Length'));
+		if (postRangeRequestFilesize !== filesize) {
+			throw 'incorrect Content-Length after range request, expected: ' + filesize + ', actual: ' + postRangeRequestFilesize;
+		}
+
+		console.log('Got length again: ' + postRangeRequestFilesize);
+	};
+
+	xhr1_cacheLength.send(null);
+
+	</script>
+</head>
+</html>
